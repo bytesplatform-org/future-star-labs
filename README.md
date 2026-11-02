@@ -9,7 +9,13 @@ npm run build
 
 ## How it fits together
 
-**Hero** (`components/home/Hero.tsx`): the name is set as three lines that drift apart along x, alternately, as the page scrolls, and lean gently away from the pointer.
+**Hero** (`components/home/Hero.tsx`):
+- The name is set as three lines that drift apart along x, alternately, as the page scrolls, and lean away from the pointer.
+- Once the arrival has played, the headline is drawn in GL (`lib/hero/heroType.ts` glyph atlas, placed every frame from the live DOM) through a thermal fluid the pointer stirs (`lib/hero/thermalTrail.ts`).
+  - The fluid bends the letters, splitting them into blue and orange fringes.
+  - Its heat burns them toward white and fills the hollow STAR.
+  - The fluid itself is never drawn in the open.
+- The DOM `<h1>` stays underneath for readers and search, and stays visible without WebGL or float render targets, or under reduced motion.
 
 **Pointer trail** (`components/gl/FilmTrail.tsx`, `lib/gl/filmTrail.ts`):
 - A small liquid-film trail over the whole home page, after the pearl trail on bytesplatform.com.
@@ -23,7 +29,7 @@ npm run build
 
 **GLSL** (`lib/gl/engine.ts`):
 - A small Three.js stage on GSAP's ticker. `components/gl/ShaderCanvas.tsx` mounts a fullscreen shader pass.
-- It drives the pointer trail and the Seebeck experiment (`lib/shaders/seebeckJunction.ts`, state in `lib/gl/junctionState.ts`).
+- It drives the hero headline, the pointer trail and the Seebeck experiment (`lib/shaders/seebeckJunction.ts`, state in `lib/gl/junctionState.ts`).
 
 **Motion**:
 - Lenis (`lib/animation/scroll.ts`) drives the scroll and keeps ScrollTrigger in step.

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
-import { isCoarsePointer, prefersReducedMotion } from "@/lib/animation/prefs";
+import { fontsReady, isCoarsePointer, prefersReducedMotion } from "@/lib/animation/prefs";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -20,19 +20,27 @@ const SEQUENCE = ["Matter", "Energy", "Signal", "Discovery"];
 const PROBE_MIN = 20;
 const PROBE_MAX = 480;
 
+/** when the GL headline takes over from the DOM: after the arrival has played */
+const TAKEOVER_DELAY = 2.1;
+
 /**
  * Scene 01. The name is the architecture: three lines set flush left,
  * flush right, indented — and they pull apart along x as the page scrolls,
  * each the opposite way to its neighbour.
  *
- * The lines also lean gently away from the pointer, alternately, and the
- * probe readout gives a temperature for where it is.
+ * Once the arrival has played, the headline is drawn in GL through a thermal
+ * fluid the pointer stirs (lib/hero/thermalTrail.ts): bent by the moving
+ * medium, burning toward white where the heat passes, the hollow STAR
+ * filling as it does. The fluid itself is never drawn in the open.
+ * The DOM headline stays in place underneath for readers and search, and
+ * remains the visible one without WebGL or with reduced motion.
  */
 export default function Hero() {
   const rootRef = useRef<HTMLElement>(null);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
   const readoutRef = useRef<HTMLSpanElement>(null);
 
-  // Arrival, scroll drift and lean.
+  // Arrival, scroll drift and lean: DOM motion, which the GL copy follows.
   useEffect(() => {
     const root = rootRef.current;
     if (!root || prefersReducedMotion()) return;
@@ -81,15 +89,108 @@ export default function Hero() {
     return () => ctx.revert();
   }, []);
 
+  // The GL headline, and the thermal fluid it's drawn through.
+  useEffect(() => {
+    const root = rootRef.current;
+    const canvas = canvasRef.current;
+    if (!root || !canvas || prefersReducedMotion()) return;
+    const coarse = isCoarsePointer();
+    let cancelled = false;
+    let teardown: (() => void) | undefined;
+
+    Promise.all([import("@/lib/gl/engine"), import("@/lib/hero/thermalTrail"), import("@/lib/hero/heroType")]).then(
+      ([{ createStage }, { createThermalTrail }, { buildAtlas, placeWords }]) => {
+        if (cancelled) return;
+        const stage = createStage(canvas, { dprCap: coarse ? 1.5 : 2 });
+        if (!stage) return;
+        const trail = createThermalTrail(
+          stage.renderer,
+          coarse ? { sim: 96, dye: 384, pressureIterations: 12 } : { sim: 160, dye: 640, pressureIterations: 20 },
+        );
+        if (!trail) {
+          stage.dispose();
+          return;
+        }
+        stage.add(trail);
+
+        const words = Array.from(root.querySelectorAll<HTMLElement>("h1 [data-hero-word]")).map(word => ({
+          word,
+          baseline: word.parentElement!.querySelector<HTMLElement>("[data-baseline]")!,
+        }));
+        const pr = () => stage.renderer.getPixelRatio();
+        let atlas: ReturnType<typeof buildAtlas> | null = null;
+
+        // Follow the DOM every frame, so drift and lean carry into GL.
+        const follow = () => {
+          if (atlas) trail.place(placeWords(words, atlas, canvas.getBoundingClientRect(), pr()));
+        };
+        gsap.ticker.add(follow);
+
+        const rasterise = () => {
+          atlas = buildAtlas(words, pr());
+          trail.setAtlas(atlas.display, atlas.fill);
+          follow();
+        };
+        let resizeTimer: number | undefined;
+        const ro = new ResizeObserver(() => {
+          if (!atlas) return;
+          window.clearTimeout(resizeTimer);
+          resizeTimer = window.setTimeout(rasterise, 120);
+        });
+        ro.observe(root);
+
+        // Take over from the DOM once the arrival has played and the font is in.
+        const takeover = gsap.delayedCall(TAKEOVER_DELAY, () => {
+          void fontsReady(3000).then(() => {
+            if (cancelled) return;
+            rasterise();
+            root.setAttribute("data-gl-type", "");
+            gsap.to(trail.text, { value: 1, duration: 0.5, ease: "sine.inOut" });
+          });
+        });
+
+        // The probe: the hand on fine pointers; on touch, a slow path of its own.
+        const toCanvas = (x: number, y: number) => {
+          const r = canvas.getBoundingClientRect();
+          trail.pointer((x - r.left) / r.width, (y - r.top) / r.height);
+        };
+        const onMove = (e: PointerEvent) => toCanvas(e.clientX, e.clientY);
+        const drift = (time: number) => {
+          trail.pointer(0.5 + 0.34 * Math.sin(time * 0.45), 0.55 + 0.18 * Math.sin(time * 0.7 + 1.3));
+        };
+        if (coarse) gsap.ticker.add(drift);
+        else window.addEventListener("pointermove", onMove, { passive: true });
+
+        teardown = () => {
+          takeover.kill();
+          gsap.ticker.remove(follow);
+          gsap.ticker.remove(drift);
+          window.removeEventListener("pointermove", onMove);
+          window.clearTimeout(resizeTimer);
+          ro.disconnect();
+          root.removeAttribute("data-gl-type");
+          stage.dispose();
+        };
+      },
+    );
+
+    return () => {
+      cancelled = true;
+      teardown?.();
+    };
+  }, []);
+
   return (
     <section
       ref={rootRef}
       id="top"
       aria-labelledby="hero-title"
-      className="gutter relative flex min-h-svh flex-col overflow-hidden pb-6 pt-24 md:pb-8 md:pt-28"
+      className="hero gutter relative flex min-h-svh flex-col overflow-hidden pb-6 pt-24 md:pb-8 md:pt-28"
     >
       {/* Lab paper. */}
       <div aria-hidden="true" className="hero-grid pointer-events-none absolute inset-0" />
+      {/* The GL headline. */}
+      <canvas ref={canvasRef} aria-hidden="true" className="pointer-events-none absolute inset-0 h-full w-full" />
 
       <div className="label relative flex justify-between text-steel" data-hero-fade>
         <p>Physics · Materials · Energy</p>
@@ -107,9 +208,11 @@ export default function Hero() {
         <h1 id="hero-title" className="hero-type display">
           {LINES.map(l => (
             <span key={l.text} data-hero-line="" data-dir={l.dir} className={`block ${l.className}`}>
-              <span data-hero-word="" className={`inline-block ${l.hollow ? "outline-type" : ""}`}>
+              <span data-hero-word="" data-hollow={l.hollow ? "" : undefined} className={`inline-block ${l.hollow ? "outline-type" : ""}`}>
                 {l.text}
-              </span>{" "}
+              </span>
+              {/* Marks the baseline for the GL copy. */}
+              <span data-baseline="" aria-hidden="true" className="inline-block h-0 w-0 align-baseline" />{" "}
             </span>
           ))}
         </h1>
