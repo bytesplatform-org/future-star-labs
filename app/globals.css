@@ -229,14 +229,6 @@ html.motion [data-hero-fade] {
   opacity: 0;
 }
 
-/* Once the thermal pass draws the headline, the DOM copy steps back:
-   still laid out (the GL copy follows it), still selectable and read. */
-.hero[data-gl-type] [data-hero-word] {
-  color: transparent;
-  --stroke: transparent;
-  transition: color 0.5s, -webkit-text-stroke-color 0.5s;
-}
-
 /* Lab paper: a 12-column grid, fading out toward the edges. */
 .hero-grid {
   background-image:

@@ -7,6 +7,7 @@ import Experiment from "@/components/home/Experiment";
 import Philosophy from "@/components/home/Philosophy";
 import Finale from "@/components/home/Finale";
 import SiteFooter from "@/components/site/SiteFooter";
+import FilmTrail from "@/components/gl/FilmTrail";
 
 /**
  * Matter → Energy → Signal → Discovery, as eight scenes.
@@ -23,6 +24,7 @@ export default function Home() {
       <Philosophy />
       <Finale />
       <SiteFooter home />
+      <FilmTrail />
     </>
   );
 }
