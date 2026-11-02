@@ -5,49 +5,106 @@ import { useCallback, useEffect, useRef, useState, type CSSProperties } from "re
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import ShaderCanvas from "@/components/gl/ShaderCanvas";
+import type { Stage } from "@/lib/gl/engine";
 import { fields } from "@/lib/content/home";
 import { isCoarsePointer, prefersReducedMotion } from "@/lib/animation/prefs";
 import type { FieldKey } from "@/lib/content/subjects";
-import { phenomenaFragment } from "@/lib/shaders/phenomena";
+import { PHENOMENA, phenomenaFragment } from "@/lib/shaders/phenomena";
 
 gsap.registerPlugin(ScrollTrigger);
 
 /**
- * The phenomena shader's state: which band of the list it lights (top,
- * bottom, as fractions of the list's height) and how much of each field
- * it shows. One list per page; the shader reads these by reference.
+ * The phenomena shader's state, one slot per row (lib/shaders/phenomena.ts):
+ * its band (top, bottom as fractions of the list's height, then the entry
+ * origin — x across the list, y within the band), how present it is, and
+ * how far it has grown out from that origin. One list per page; the shader
+ * reads these by reference.
  */
 const phenomena = {
-  uBand: { value: [0, 0] },
-  uShow: { value: 0 },
-  uModeA: { value: [0, 0, 0, 0] },
-  uModeB: { value: 0 },
+  uBands: { value: new Array<number>(PHENOMENA * 4).fill(0) },
+  uShow: { value: new Array<number>(PHENOMENA).fill(0) },
+  uGrow: { value: new Array<number>(PHENOMENA).fill(0) },
 };
-const MODE: Record<FieldKey, number> = { thermal: 0, em: 1, electric: 2, materials: 3, signal: 4 };
+const ROW: Record<FieldKey, number> = { thermal: 0, em: 1, electric: 2, materials: 3, signal: 4 };
 const QUALITY = { desktop: { dprCap: 1.5, scale: 0.8 }, touch: { dprCap: 1.5, scale: 0.6 } };
 
-/** Eases the phenomenon onto the active row, or away. */
-function showPhenomenon(list: HTMLElement, key: FieldKey | null) {
-  const still = prefersReducedMotion();
-  const to = (target: object, vars: gsap.TweenVars) =>
-    still ? gsap.set(target, vars) : gsap.to(target, { ...vars, overwrite: true });
-
-  if (!key) {
-    to(phenomena.uShow, { value: 0, duration: 0.6, ease: "sine.out" });
-    return;
-  }
-  const row = list.querySelector<HTMLElement>(`[data-key="${key}"]`);
-  if (!row) return;
+/** Measures every row's band from the layout (origins are kept). */
+function measureBands(list: HTMLElement) {
   const h = list.offsetHeight || 1;
-  const band = { 0: row.offsetTop / h, 1: (row.offsetTop + row.offsetHeight) / h };
-  // Arriving from nothing, the band appears in place; between rows it travels.
-  if (phenomena.uShow.value < 0.05) gsap.set(phenomena.uBand.value, band);
-  else to(phenomena.uBand.value, { ...band, duration: 0.8, ease: "expo.out" });
-  to(phenomena.uShow, { value: 1, duration: 0.6, ease: "sine.out" });
+  list.querySelectorAll<HTMLElement>("[data-key]").forEach(row => {
+    const i = ROW[row.dataset.key as FieldKey];
+    phenomena.uBands.value[i * 4] = row.offsetTop / h;
+    phenomena.uBands.value[i * 4 + 1] = (row.offsetTop + row.offsetHeight) / h;
+  });
+}
 
-  const m = MODE[key];
-  to(phenomena.uModeA.value, { 0: +(m === 0), 1: +(m === 1), 2: +(m === 2), 3: +(m === 3), duration: 0.9, ease: "sine.inOut" });
-  to(phenomena.uModeB, { value: +(m === 4), duration: 0.9, ease: "sine.inOut" });
+/**
+ * Each row's presence and growth, eased here and copied into the shader's
+ * arrays every frame (see the stage hook in Fields). One object per row, so
+ * a row's tweens only ever contend with that row's own.
+ */
+const rows = Array.from({ length: PHENOMENA }, () => ({ show: 0, grow: 0 }));
+
+function syncPhenomena() {
+  rows.forEach((r, i) => {
+    phenomena.uShow.value[i] = r.show;
+    phenomena.uGrow.value[i] = r.grow;
+  });
+}
+
+/**
+ * Copies the rows' state into the shader every frame. A still stage
+ * (reduced motion) doesn't draw on its own, so it's asked to on a change.
+ */
+function onPhenomenaStage(stage: Stage) {
+  const still = prefersReducedMotion();
+  let last = "";
+  const tick = () => {
+    syncPhenomena();
+    if (!still) return;
+    const now = rows.map(r => r.show).join();
+    if (now !== last) {
+      last = now;
+      stage.renderOnce();
+    }
+  };
+  gsap.ticker.add(tick);
+  return () => gsap.ticker.remove(tick);
+}
+
+/**
+ * Fades the active row's phenomenon in where it is — grown out from where
+ * the pointer entered (or the row's middle) — and every other row's out
+ * where it is. Nothing travels between rows.
+ */
+function showPhenomenon(list: HTMLElement, key: FieldKey | null, entry?: { x: number; y: number }) {
+  const still = prefersReducedMotion();
+  measureBands(list);
+  rows.forEach((r, i) => {
+    const on = key !== null && ROW[key] === i;
+    gsap.killTweensOf(r);
+    if (still) {
+      r.show = on ? 1 : 0;
+      if (on) r.grow = 1;
+      return;
+    }
+    if (!on) {
+      gsap.to(r, { show: 0, duration: 0.6, ease: "sine.inOut" });
+      return;
+    }
+    // Arriving afresh: set the origin and grow out from it.
+    if (r.show < 0.05) {
+      const row = list.querySelector<HTMLElement>(`[data-key="${key}"]`)!;
+      const lr = list.getBoundingClientRect();
+      const rr = row.getBoundingClientRect();
+      phenomena.uBands.value[i * 4 + 2] = entry ? (entry.x - lr.left) / lr.width : 0.5;
+      phenomena.uBands.value[i * 4 + 3] = entry ? (entry.y - rr.top) / rr.height : 0.5;
+      r.grow = 0;
+    }
+    gsap.to(r, { show: 1, duration: 0.45, ease: "sine.out" });
+    gsap.to(r, { grow: 1, duration: 1.1, ease: "power2.out" });
+  });
+  syncPhenomena();
 }
 
 /** what each field means in colour — the same vocabulary as the shader */
@@ -61,10 +118,11 @@ const TONE: Record<FieldKey, string> = {
 
 /**
  * Scene 03. Each field of exploration is a full-width row; pointing at one
- * (or, on touch, scrolling it to the middle) runs its phenomenon inside the
- * row (lib/shaders/phenomena.ts): rising isotherms for heat, dipole field
- * lines, travelling equipotentials, a lattice under diffraction, traces on
- * a graticule.
+ * (or, on touch, scrolling it to the middle) fades its phenomenon in, in
+ * place, growing out from where the pointer came in
+ * (lib/shaders/phenomena.ts): rising isotherms for heat, dipole field
+ * lines, running equipotentials, a lattice under diffraction, traces on a
+ * graticule — each one answering the pointer.
  */
 export default function Fields() {
   const listRef = useRef<HTMLOListElement>(null);
@@ -72,10 +130,19 @@ export default function Fields() {
 
   const current = useRef<FieldKey | null>(null);
 
-  const activate = useCallback((key: FieldKey | null) => {
+  const activate = useCallback((key: FieldKey | null, entry?: { x: number; y: number }) => {
     current.current = key;
     setActive(key);
-    if (listRef.current) showPhenomenon(listRef.current, key);
+    if (listRef.current) showPhenomenon(listRef.current, key, entry);
+  }, []);
+
+  // Bands follow the layout as it reflows.
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list) return;
+    const ro = new ResizeObserver(() => measureBands(list));
+    ro.observe(list);
+    return () => ro.disconnect();
   }, []);
 
   // Touch has no hover: the row at the middle of the screen is the active one.
@@ -120,6 +187,7 @@ export default function Fields() {
           fragmentShader={phenomenaFragment}
           uniforms={phenomena}
           quality={QUALITY}
+          onStage={onPhenomenaStage}
           className="pointer-events-none absolute inset-0 h-full w-full"
         />
         <ol
@@ -134,7 +202,7 @@ export default function Fields() {
               <li
                 key={f.key}
                 data-key={f.key}
-                onMouseEnter={() => activate(f.key)}
+                onMouseEnter={e => activate(f.key, { x: e.clientX, y: e.clientY })}
                 onFocus={() => activate(f.key)}
                 style={{ "--tone": TONE[f.key] } as CSSProperties}
                 className={`gutter relative grid grid-cols-12 items-end gap-x-4 gap-y-3 border-t border-paper/10 py-[4.5vh] transition-opacity duration-700 md:py-[3.2vw] ${
