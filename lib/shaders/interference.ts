@@ -3,8 +3,11 @@
  * circular wave; where they meet, they add. The wavefronts are drawn as
  * lines — crests in paper, troughs in cold blue — lit by the local
  * amplitude of the sum, so the nodal lines, where the waves cancel, fall
- * dark between them. The second source follows the pointer over the plate;
- * uWave shortens the wavelength as the section scrolls.
+ * dark between them.
+ *
+ *   uA, uB   the two sources, in plate uv — placed by the component, which
+ *            eases whichever is nearer the pointer toward it
+ *   uWave    shortens the wavelength as the section scrolls
  */
 
 import { simplex2D } from "./noise";
@@ -14,7 +17,8 @@ export const interferenceFragment = /* glsl */ `
 
   uniform float uTime;
   uniform vec2 uResolution;
-  uniform vec2 uMouse;
+  uniform vec2 uA;
+  uniform vec2 uB;
   uniform float uWave;
 
   varying vec2 vUv;
@@ -27,11 +31,8 @@ export const interferenceFragment = /* glsl */ `
     float t = uTime * 2.4;
     float k = mix(30.0, 56.0, uWave);
 
-    // Source A drifts slowly; source B is the probe when it's over the plate.
-    vec2 a = vec2(-0.28 * aspect, 0.06 * sin(uTime * 0.3));
-    bool over = all(greaterThan(uMouse, vec2(0.0))) && all(lessThan(uMouse, vec2(1.0)));
-    vec2 rest = vec2(0.24 * aspect + 0.05 * sin(uTime * 0.21), -0.08 + 0.06 * cos(uTime * 0.27));
-    vec2 b = over ? (uMouse - 0.5) * vec2(aspect, 1.0) : rest;
+    vec2 a = (uA - 0.5) * vec2(aspect, 1.0);
+    vec2 b = (uB - 0.5) * vec2(aspect, 1.0);
 
     float r1 = length(p - a);
     float r2 = length(p - b);
