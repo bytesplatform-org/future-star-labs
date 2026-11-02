@@ -39,13 +39,18 @@ export type Stage = {
 export type StageOptions = {
   /** upper bound on devicePixelRatio; fill-rate is the usual GPU cost */
   dprCap?: number;
+  /**
+   * Fraction of that resolution to actually shade (0..1). Soft fields lose
+   * little at 0.5–0.75 and cost a quarter to a half as much.
+   */
+  scale?: number;
   /** false: draw on demand only (renderOnce) */
   animate?: boolean;
   alpha?: boolean;
 };
 
 export function createStage(canvas: HTMLCanvasElement, opts: StageOptions = {}): Stage | null {
-  const { dprCap = 2, animate = true, alpha = true } = opts;
+  const { dprCap = 2, scale = 1, animate = true, alpha = true } = opts;
 
   let renderer: THREE.WebGLRenderer;
   try {
@@ -59,7 +64,7 @@ export function createStage(canvas: HTMLCanvasElement, opts: StageOptions = {}):
     // No WebGL: callers fall back to whatever sits behind the canvas.
     return null;
   }
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, dprCap));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, dprCap) * scale);
   renderer.setClearColor(0x000000, 0);
   // The stage clears once per frame; passes then layer on top of each other.
   renderer.autoClear = false;

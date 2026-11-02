@@ -1,26 +1,412 @@
 @import "tailwindcss";
 
+/* ── Tokens ─────────────────────────────────────────────────────────────
+   Graphite environment; colour carries meaning:
+   cold = low energy, heat = high energy, signal = information. */
+@theme {
+  --color-void: #0a0b0d;
+  --color-graphite-950: #0c0d10;
+  --color-graphite-900: #121418;
+  --color-graphite-800: #1b1e23;
+  --color-graphite-700: #2a2e35;
+  --color-steel: #8d939c;
+  --color-steel-dim: #5b6068;
+  --color-paper: #ece8df;
+  --color-cold: #4c7dff;
+  --color-heat: #ff6a2a;
+  --color-signal: #8f78ff;
+
+  --font-display: var(--font-aldrich), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--font-aldrich), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), ui-monospace, monospace;
+
+  --ease-field: cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --gutter: clamp(1rem, 3.2vw, 3rem);
+  color-scheme: dark;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+html {
+  background: var(--color-graphite-950);
+  /* clip, not hidden: sticky scenes keep working */
+  overflow-x: clip;
+  scrollbar-color: var(--color-graphite-700) transparent;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
+/* No background on body: it would paint over the fixed field (z -10). */
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  color: var(--color-paper);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+::selection {
+  background: var(--color-heat);
+  color: var(--color-void);
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-heat);
+  outline-offset: 4px;
+}
+
+/* ── Type ───────────────────────────────────────────────────────────── */
+
+/* Aldrich has a single weight: display type gets its mass from size and
+   tight tracking, statements their air from open tracking. */
+@utility display {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 0.86;
+  letter-spacing: -0.045em;
+  text-transform: uppercase;
+}
+
+@utility display-wide {
+  font-family: var(--font-display);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+
+/* Compact technical labels: the instrument voice. */
+@utility label {
+  font-family: var(--font-mono);
+  font-size: 0.6875rem;
+  line-height: 1.4;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+@utility outline-type {
+  color: transparent;
+  -webkit-text-stroke: max(1px, 0.012em) var(--stroke, var(--color-paper));
+}
+
+@utility gutter {
+  padding-inline: var(--gutter);
+}
+
+@utility hairline {
+  height: 1px;
+  background: color-mix(in oklab, var(--color-paper) 16%, transparent);
+}
+
+/* ── Reveals ────────────────────────────────────────────────────────────
+   html.motion is set before first paint (see layout) unless the reader
+   prefers reduced motion; RevealObserver marks [data-reveal] elements
+   data-shown as they enter. Without either, everything is simply there. */
+
+/* Masked lines: each .line clips its inner span, which rises into place. */
+[data-reveal="mask"] .line {
+  display: block;
+  overflow: clip;
+  overflow-clip-margin: 0.08em;
+  padding-bottom: 0.02em;
+}
+[data-reveal="mask"] .line > span {
+  display: inline-block;
+}
+html.motion [data-reveal="mask"] .line > span {
+  transform: translateY(104%);
+  transition: transform 1.4s var(--ease-out-expo);
+  transition-delay: calc(var(--i, 0) * 90ms + var(--delay, 0ms));
+}
+html.motion [data-reveal="mask"][data-shown] .line > span {
+  transform: none;
+}
+
+/* Horizontal sweep: a wipe from the left, like a reading crossing a scale. */
+html.motion [data-reveal="sweep"] {
+  clip-path: inset(0 100% 0 0);
+  transition: clip-path 1.6s var(--ease-field);
+  transition-delay: var(--delay, 0ms);
+}
+html.motion [data-reveal="sweep"][data-shown] {
+  clip-path: inset(0 0 0 0);
+}
+
+/* Rules draw out from their origin. */
+html.motion [data-reveal="rule"] {
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 1.8s var(--ease-field);
+  transition-delay: var(--delay, 0ms);
+}
+html.motion [data-reveal="rule"][data-shown] {
+  transform: none;
+}
+
+/* Settle: content resolving as the energy around it settles. */
+html.motion [data-reveal="settle"] {
+  opacity: 0;
+  filter: blur(10px);
+  transition: opacity 1.4s var(--ease-field), filter 1.6s var(--ease-field);
+  transition-delay: var(--delay, 0ms);
+}
+html.motion [data-reveal="settle"][data-shown] {
+  opacity: 1;
+  filter: none;
+}
+
+/* Scroll scenes: tall while choreographed; just their content otherwise. */
+html.motion .scroll-scene {
+  height: var(--scene-length, 400vh);
+}
+html.motion .scroll-scene .scene-sticky {
+  position: sticky;
+  top: 0;
+}
+
+/* The junction controls: a hairline track filled in the junction's colour,
+   a thin bar for a thumb — a dial on an instrument, not a form field. */
+.junction-range {
+  appearance: none;
+  height: 28px;
+  background: transparent;
+  cursor: ew-resize;
+}
+.junction-range::-webkit-slider-runnable-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--tone) var(--fill), color-mix(in oklab, var(--color-paper) 14%, transparent) var(--fill));
+}
+.junction-range::-moz-range-track {
+  height: 2px;
+  background: linear-gradient(to right, var(--tone) var(--fill), color-mix(in oklab, var(--color-paper) 14%, transparent) var(--fill));
+}
+.junction-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 3px;
+  height: 26px;
+  margin-top: -12px;
+  background: var(--color-paper);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--tone) 30%, transparent);
+}
+.junction-range::-moz-range-thumb {
+  width: 3px;
+  height: 26px;
+  border: 0;
+  border-radius: 0;
+  background: var(--color-paper);
+  box-shadow: 0 0 0 4px color-mix(in oklab, var(--tone) 30%, transparent);
+}
+.junction-range:focus-visible {
+  outline-offset: 6px;
+}
+
+/* A drop of heat running down the scroll cue. */
+@keyframes drip {
+  0% { transform: scaleY(0); transform-origin: top; }
+  45% { transform: scaleY(1); transform-origin: top; }
+  55% { transform: scaleY(1); transform-origin: bottom; }
+  100% { transform: scaleY(0); transform-origin: bottom; }
+}
+
+/* ── Scene 01: the hero ──────────────────────────────────────────────── */
+
+.hero-type {
+  font-size: min(19vw, 26svh);
+  line-height: 0.9;
+  white-space: nowrap;
+}
+@media (max-width: 767px) {
+  .hero-type { font-size: 24vw; }
+}
+
+/* Before the arrival plays, each word waits clipped on its own side. */
+html.motion [data-hero-line] > span {
+  clip-path: inset(-10% 100% -10% 0%);
+}
+html.motion [data-hero-line][data-dir="-1"] > span {
+  clip-path: inset(-10% 0% -10% 100%);
+}
+html.motion [data-hero-fade] {
+  opacity: 0;
+}
+
+/* Lab paper: a 12-column grid, fading out toward the edges. */
+.hero-grid {
+  background-image:
+    linear-gradient(to right, rgb(236 232 223 / 0.045) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(236 232 223 / 0.045) 1px, transparent 1px);
+  background-size: calc(100% / 12) calc(100% / 12);
+  -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 40%, transparent 100%);
+  mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 40%, transparent 100%);
+}
+
+/* The probe warms the paper under it. */
+.hero-glow {
+  background: radial-gradient(circle 32vw at var(--mx, 66%) var(--my, 50%), rgb(255 106 42 / 0.13), rgb(255 106 42 / 0.04) 45%, transparent 70%);
+}
+
+/* The heated type: visible only within the probe's reach. */
+.hero-heat {
+  color: var(--color-heat);
+  --reach: radial-gradient(
+    circle 13vw at calc(var(--mx, 66%) - var(--wx, 0px)) calc(var(--my, 50%) - var(--wy, 0px)),
+    #000 0%,
+    rgb(0 0 0 / 0.85) 35%,
+    transparent 100%
+  );
+  -webkit-mask-image: var(--reach);
+  mask-image: var(--reach);
+}
+
+/* A measuring scale: a tick every 8px, a long one every 80px. */
+.hero-ruler {
+  background-image:
+    repeating-linear-gradient(to right, rgb(236 232 223 / 0.5) 0 1px, transparent 1px 80px),
+    repeating-linear-gradient(to right, rgb(236 232 223 / 0.22) 0 1px, transparent 1px 8px);
+  background-size: 100% 100%, 100% 45%;
+  background-position: 0 0, 0 100%;
+  background-repeat: no-repeat;
+}
+
+/* ── Scene 04: the thermoelectric couple ─────────────────────────────── */
+/* The couple diagram. Parts are dim until their step is reached
+   (ScrollScene sets data-reached), and the current step's part leads. */
+
+.te-part {
+  opacity: 0.14;
+  transition: opacity 1.1s var(--ease-field);
+}
+.te-part[data-reached] {
+  opacity: 1;
+}
+
+.te-leg-fill {
+  opacity: 0;
+  transition: opacity 1.4s var(--ease-field);
+}
+[data-reached] > .te-leg-fill {
+  opacity: 1;
+}
+
+/* Heat entering the hot face. */
+.te-heat-in {
+  stroke-dasharray: 6 10;
+  animation: te-flow-down 1.6s linear infinite;
+  animation-play-state: paused;
+}
+[data-reached] .te-heat-in {
+  animation-play-state: running;
+}
+
+/* Carriers diffusing from hot to cold down each leg. */
+.te-carrier {
+  animation: te-diffuse var(--d, 3.2s) var(--ease-field) infinite;
+  animation-delay: var(--delay, 0s);
+  animation-play-state: paused;
+  opacity: 0;
+}
+[data-reached] .te-carrier {
+  animation-play-state: running;
+}
+
+/* Current around the external circuit. */
+.te-current {
+  stroke-dasharray: 3 14;
+  animation: te-flow-along 1.1s linear infinite;
+  animation-play-state: paused;
+}
+[data-reached] .te-current {
+  animation-play-state: running;
+}
+
+.te-load {
+  transition: filter 1.2s var(--ease-field);
+}
+[data-reached] .te-load {
+  filter: drop-shadow(0 0 6px var(--color-heat));
+}
+
+@keyframes te-flow-down {
+  to { stroke-dashoffset: -32; }
+}
+@keyframes te-flow-along {
+  to { stroke-dashoffset: -34; }
+}
+@keyframes te-diffuse {
+  0% { transform: translateY(0); opacity: 0; }
+  12% { opacity: 1; }
+  85% { opacity: 1; }
+  100% { transform: translateY(var(--travel, 270px)); opacity: 0; }
+}
+
+/* Steps: the current one reads in full, reached ones recede. */
+.te-step {
+  opacity: 0.28;
+  transition: opacity 0.9s var(--ease-field);
+}
+.te-step[data-reached] {
+  opacity: 0.55;
+}
+.te-step[data-current] {
+  opacity: 1;
+}
+.te-step-body {
+  display: grid;
+  grid-template-rows: 1fr;
+  transition: grid-template-rows 0.9s var(--ease-field);
+}
+.te-step-body > p {
+  overflow: hidden;
+}
+/* While choreographed, only the current step opens its text. */
+html.motion .te-step:not([data-current]) .te-step-body {
+  grid-template-rows: 0fr;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .te-carrier { opacity: 0.8; }
+}
+
+/* ── Scene 07: the method ──────────────────────────────────────────── */
+/* Words to come are outlines; read words stay lit in steel; the word in
+   the reading line is solid paper. Without choreography all read in full. */
+
+.method-word {
+  color: transparent;
+  -webkit-text-stroke: 1px color-mix(in oklab, var(--color-paper) 45%, transparent);
+  transition: color 0.8s var(--ease-field), -webkit-text-stroke-color 0.8s var(--ease-field);
+}
+[data-reached] > .method-word {
+  color: var(--color-steel-dim);
+  -webkit-text-stroke-color: transparent;
+}
+[data-current] > .method-word,
+html:not(.motion) .method-word {
+  color: var(--color-paper);
+  -webkit-text-stroke-color: transparent;
+}
+
+.method-note {
+  opacity: 0;
+  transition: opacity 0.8s var(--ease-field);
+}
+[data-current] > .method-note,
+html:not(.motion) .method-note {
+  opacity: 1;
+}
+
+/* The stack rises through the frame as the scene plays. */
+html.motion .method-stack {
+  transform: translateY(calc((0.375 - var(--p, 0.375)) * 22%));
+  will-change: transform;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

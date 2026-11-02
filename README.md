@@ -1,36 +1,39 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Future Star Labs
 
-## Getting Started
-
-First, run the development server:
+The Future Star Labs site: physics, materials and energy from first principles, told as eight scenes. `MATTER → ENERGY → SIGNAL → DISCOVERY`.
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm run dev     # http://localhost:3000
+npm run build
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## How it fits together
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+**Hero** (`components/home/Hero.tsx`):
+- The name is set as three lines that drift apart along x, alternately, as the page scrolls.
+- The pointer acts as a thermal probe. A heated copy of the type shows through a radial mask around it, and the lines lean away from it.
+- On touch the probe drifts by itself; under reduced motion it stays parked.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+**Navigation** (`components/site/SiteNav.tsx`):
+- It mirrors futurestarlabs.com's menu (data in `lib/content/site.ts`).
+- Pages this rebuild doesn't have yet link to the original site, marked ↗.
+- Subjects opens a panel listing the notebook chapters. Below `xl` the nav becomes a full-screen menu.
 
-## Learn More
+**GLSL** (`lib/gl/engine.ts`):
+- A small Three.js stage on GSAP's ticker. `components/gl/ShaderCanvas.tsx` mounts a fullscreen shader pass.
+- It currently drives the Seebeck experiment (`lib/shaders/seebeckJunction.ts`, state in `lib/gl/junctionState.ts`).
 
-To learn more about Next.js, take a look at the following resources:
+**Motion**:
+- Lenis (`lib/animation/scroll.ts`) drives the scroll and keeps ScrollTrigger in step.
+- GSAP runs the scrubbed pieces.
+- Reveals are CSS (`[data-reveal="mask|sweep|rule|settle"]` in `globals.css`), armed by one observer.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+**Reduced motion and no JS**: `html.motion` is set before first paint only when motion is allowed. Without it, the scroll scenes collapse and everything is visible.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+**Content**:
+- Everything factual lives in `lib/content/`, sourced from futurestarlabs.com. `subjects.ts` generates `/subjects/[slug]`.
+- Write equations with `_x` subscripts (`T_h`) and render them through `components/site/Expr.tsx`.
 
-## Deploy on Vercel
+**Type**: Aldrich for everything, IBM Plex Mono for technical labels.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+> CSS modules aren't used here. The Turbopack rule in `next.config.ts` runs Tailwind over every `*.css`, so component styles live in `app/globals.css` under prefixed class names (`hero-*`, `te-*`, `method-*`).
