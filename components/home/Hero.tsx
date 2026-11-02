@@ -10,8 +10,8 @@ gsap.registerPlugin(ScrollTrigger);
 /** The name, one line per word. dir: which way the line travels on scroll. */
 const LINES = [
   { text: "Future", dir: 1, className: "" },
-  { text: "Star", dir: -1, className: "text-right", hollow: true },
-  { text: "Labs", dir: 1, className: "pl-[9vw]" },
+  { text: "Star", dir: -1, className: "pl-[14vw] md:pl-[26vw]", hollow: true },
+  { text: "Labs", dir: 1, className: "pl-[5vw] md:pl-[10vw]" },
 ];
 
 const SEQUENCE = ["Matter", "Energy", "Signal", "Discovery"];
@@ -24,9 +24,9 @@ const PROBE_MAX = 480;
 const TAKEOVER_DELAY = 2.1;
 
 /**
- * Scene 01. The name is the architecture: three lines set flush left,
- * flush right, indented — and they pull apart along x as the page scrolls,
- * each the opposite way to its neighbour.
+ * Scene 01. The name is the architecture: three lines set in a close
+ * cascade so they read as one name — and they pull apart along x as the
+ * page scrolls, each the opposite way to its neighbour.
  *
  * Once the arrival has played, the headline is drawn in GL through a thermal
  * fluid the pointer stirs (lib/hero/thermalTrail.ts): bent by the moving
@@ -62,9 +62,9 @@ export default function Hero() {
       );
       gsap.fromTo("[data-hero-fade]", { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 1.2, ease: "power3.out", delay: 0.9, stagger: 0.08 });
 
-      // Scroll: the lines pull apart, alternately.
+      // Scroll: the name, set close to read as one, pulls apart, alternately.
       const scrub = { trigger: root, start: "top top", end: "bottom top", scrub: 0.9 };
-      lines.forEach(line => gsap.to(line, { xPercent: Number(line.dataset.dir) * 11, ease: "none", scrollTrigger: scrub }));
+      lines.forEach(line => gsap.to(line, { xPercent: Number(line.dataset.dir) * 17, ease: "none", scrollTrigger: scrub }));
       gsap.to("[data-hero-ruler]", { xPercent: -18, ease: "none", scrollTrigger: scrub });
 
       // Pointer: the lines lean away from it, alternately.
@@ -98,8 +98,8 @@ export default function Hero() {
     let cancelled = false;
     let teardown: (() => void) | undefined;
 
-    Promise.all([import("@/lib/gl/engine"), import("@/lib/hero/thermalTrail"), import("@/lib/hero/heroType")]).then(
-      ([{ createStage }, { createThermalTrail }, { buildAtlas, placeWords }]) => {
+    Promise.all([import("@/lib/gl/engine"), import("@/lib/hero/thermalTrail"), import("@/lib/gl/typeAtlas")]).then(
+      ([{ createStage }, { createThermalTrail }, { atlasWords, buildAtlas, placeWords }]) => {
         if (cancelled) return;
         const stage = createStage(canvas, { dprCap: coarse ? 1.5 : 2 });
         if (!stage) return;
@@ -113,10 +113,7 @@ export default function Hero() {
         }
         stage.add(trail);
 
-        const words = Array.from(root.querySelectorAll<HTMLElement>("h1 [data-hero-word]")).map(word => ({
-          word,
-          baseline: word.parentElement!.querySelector<HTMLElement>("[data-baseline]")!,
-        }));
+        const words = atlasWords(root.querySelector("h1")!);
         const pr = () => stage.renderer.getPixelRatio();
         let atlas: ReturnType<typeof buildAtlas> | null = null;
 
@@ -128,7 +125,7 @@ export default function Hero() {
 
         const rasterise = () => {
           atlas = buildAtlas(words, pr());
-          trail.setAtlas(atlas.display, atlas.fill);
+          trail.setAtlas(atlas.fill);
           follow();
         };
         let resizeTimer: number | undefined;
@@ -208,7 +205,7 @@ export default function Hero() {
         <h1 id="hero-title" className="hero-type display">
           {LINES.map(l => (
             <span key={l.text} data-hero-line="" data-dir={l.dir} className={`block ${l.className}`}>
-              <span data-hero-word="" data-hollow={l.hollow ? "" : undefined} className={`inline-block ${l.hollow ? "outline-type" : ""}`}>
+              <span data-hero-word="" data-atlas-word="" data-hollow={l.hollow ? "" : undefined} className={`inline-block ${l.hollow ? "outline-type" : ""}`}>
                 {l.text}
               </span>
               {/* Marks the baseline for the GL copy. */}
@@ -219,7 +216,7 @@ export default function Hero() {
 
         <p
           data-hero-fade
-          className="relative mt-8 max-w-[34ch] text-[clamp(1rem,1.15vw,1.2rem)] leading-snug text-paper/80 md:absolute md:left-0 md:top-[37%] md:mt-0 md:max-w-[30ch]"
+          className="relative mt-8 max-w-[34ch] text-[clamp(1rem,1.15vw,1.2rem)] leading-snug text-paper/80 md:absolute md:bottom-[6%] md:right-0 md:mt-0 md:max-w-[27ch]"
         >
           A working laboratory for first-principles physics, materials and energy — from the junction of a
           thermocouple to the floor of a vacuum chamber.
@@ -242,10 +239,6 @@ export default function Hero() {
           <p className="hidden items-center gap-3 md:flex" aria-hidden="true">
             Probe <span ref={readoutRef} className="min-w-[6ch] tabular-nums text-heat">— °C</span>
           </p>
-          <a href="#about" className="hidden items-center gap-3 text-paper sm:flex">
-            Scroll
-            <span aria-hidden="true" className="inline-block h-6 w-px origin-top animate-[drip_2.4s_var(--ease-field)_infinite] bg-heat" />
-          </a>
         </div>
       </div>
     </section>

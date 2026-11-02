@@ -27,9 +27,16 @@ npm run build
 - Pages this rebuild doesn't have yet link to the original site, marked ↗.
 - Subjects opens a panel listing the notebook chapters. Below `xl` the nav becomes a full-screen menu.
 
-**GLSL** (`lib/gl/engine.ts`):
-- A small Three.js stage on GSAP's ticker. `components/gl/ShaderCanvas.tsx` mounts a fullscreen shader pass.
-- It drives the hero headline, the pointer trail and the Seebeck experiment (`lib/shaders/seebeckJunction.ts`, state in `lib/gl/junctionState.ts`).
+**GLSL** (`lib/gl/engine.ts`): a small Three.js stage on GSAP's ticker. `components/gl/ShaderCanvas.tsx` mounts a fullscreen shader pass; every stage pauses offscreen. On the home page:
+- hero headline: `lib/hero/thermalTrail.ts`
+- pointer film trail: `lib/gl/filmTrail.ts`
+- Fig. 02 interference plate in the intro: `lib/shaders/interference.ts`
+- each field's phenomenon, lit in the active row: `lib/shaders/phenomena.ts`
+- heat under the thermocouple diagram, following the scene's steps: `lib/shaders/coupleHeat.ts`
+- the Seebeck experiment: `lib/shaders/seebeckJunction.ts`
+- the footer wordmark as a signal: `lib/shaders/signalType.ts`
+
+Display type drawn in GL (the hero and footer wordmarks) shares `lib/gl/typeAtlas.ts`. Mark words `data-atlas-word` (plus `data-hollow` for outlines) beside a `data-baseline` marker; the DOM text stays underneath.
 
 **Motion**:
 - Lenis (`lib/animation/scroll.ts`) drives the scroll and keeps ScrollTrigger in step.

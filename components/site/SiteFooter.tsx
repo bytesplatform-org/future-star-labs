@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { site } from "@/lib/content/site";
 import { subjects } from "@/lib/content/subjects";
+import SignalWordmark from "./SignalWordmark";
 
 const EXPLORE = [
   { id: "fields", label: "Fields of exploration" },
@@ -64,13 +65,20 @@ export default function SiteFooter({ home = false }: { home?: boolean }) {
         </div>
       </div>
 
-      <p
-        aria-hidden="true"
-        data-reveal="sweep"
-        className="display mt-[14vh] whitespace-nowrap text-center text-[8.6vw] leading-[0.86] text-paper"
-      >
-        Future <span className="outline-type">Star</span> Labs
-      </p>
+      {/* The wordmark, which becomes a signal once revealed (SignalWordmark). */}
+      <div className="relative mt-[14vh]">
+        <p
+          aria-hidden="true"
+          data-reveal="sweep"
+          className="display whitespace-nowrap text-center text-[8.6vw] leading-[0.86] text-paper"
+        >
+          <span data-atlas-word="" className="inline-block">Future</span>{" "}
+          <span data-atlas-word="" data-hollow="" className="outline-type inline-block">Star</span>{" "}
+          <span data-atlas-word="" className="inline-block">Labs</span>
+          <span data-baseline="" className="inline-block h-0 w-0 align-baseline" />
+        </p>
+        <SignalWordmark />
+      </div>
 
       <div className="hairline mt-6" />
       <div className="label flex flex-col gap-3 pt-4 text-steel md:flex-row md:justify-between">

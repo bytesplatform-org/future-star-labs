@@ -199,14 +199,6 @@ html.motion .scroll-scene .scene-sticky {
   outline-offset: 6px;
 }
 
-/* A drop of heat running down the scroll cue. */
-@keyframes drip {
-  0% { transform: scaleY(0); transform-origin: top; }
-  45% { transform: scaleY(1); transform-origin: top; }
-  55% { transform: scaleY(1); transform-origin: bottom; }
-  100% { transform: scaleY(0); transform-origin: bottom; }
-}
-
 /* ── Scene 01: the hero ──────────────────────────────────────────────── */
 
 .hero-type {
@@ -229,9 +221,10 @@ html.motion [data-hero-fade] {
   opacity: 0;
 }
 
-/* Once the thermal pass draws the headline, the DOM copy steps back:
-   still laid out (the GL copy follows it), still selectable and read. */
-.hero[data-gl-type] [data-hero-word] {
+/* Once a GL pass draws display type (the hero, the footer wordmark), the
+   DOM copy steps back: still laid out (the GL copy follows it), still
+   selectable and read. */
+[data-gl-type] [data-atlas-word] {
   color: transparent;
   --stroke: transparent;
   transition: color 0.5s, -webkit-text-stroke-color 0.5s;

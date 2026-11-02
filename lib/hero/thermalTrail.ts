@@ -10,6 +10,7 @@
 
 import * as THREE from "three";
 import type { Pass } from "@/lib/gl/engine";
+import { glyphChunk, glyphUniforms, setGlyphAtlas, setGlyphPlacements, type WordPlacement } from "@/lib/gl/typeAtlas";
 
 const STEP = 1 / 60;
 const VELOCITY_DISSIPATION = 0.94;
@@ -22,13 +23,10 @@ const WORDS = 3;
 
 export type TrailQuality = { sim: number; dye: number; pressureIterations: number };
 
-/** where one word sits on screen and in the atlas, all in device px (top-left origin) */
-export type WordPlacement = { x: number; y: number; w: number; h: number; ax: number; ay: number };
-
 export type ThermalTrail = Pass & {
   /** pointer in the canvas, 0..1 from the top-left; outside lifts the probe */
   pointer(x: number, y: number): void;
-  setAtlas(display: HTMLCanvasElement, fill: HTMLCanvasElement): void;
+  setAtlas(fill: HTMLCanvasElement): void;
   place(words: WordPlacement[]): void;
   /** 0..1 — the GL headline fades in once it has taken over from the DOM */
   readonly text: { value: number };
@@ -166,11 +164,7 @@ const displayShader = /* glsl */ `
   varying vec2 vUv;
   uniform sampler2D uVelocity;
   uniform sampler2D uHeat;
-  uniform sampler2D uDisplay;
-  uniform sampler2D uFill;
-  uniform vec2 uAtlasSize;
-  uniform vec4 uWords[${WORDS}];
-  uniform vec2 uAtlas[${WORDS}];
+  ${glyphChunk(WORDS)}
   uniform vec2 uResolution;
   uniform float uText;
 
@@ -184,19 +178,6 @@ const displayShader = /* glsl */ `
     return k < 0.5
       ? mix(vec3(0.55, 0.10, 0.04), HOT, k * 2.0)
       : mix(HOT, vec3(1.0, 0.93, 0.80), k * 2.0 - 1.0);
-  }
-
-  // x: the glyph as set (STAR hollow), y: the glyph filled
-  vec2 glyph(vec2 p) {
-    vec2 g = vec2(0.0);
-    for (int i = 0; i < ${WORDS}; i++) {
-      vec2 q = p - uWords[i].xy;
-      if (q.x >= 0.0 && q.y >= 0.0 && q.x < uWords[i].z && q.y < uWords[i].w) {
-        vec2 a = (uAtlas[i] + q) / uAtlasSize;
-        g = max(g, vec2(texture2D(uDisplay, a).a, texture2D(uFill, a).a));
-      }
-    }
-    return g;
   }
 
   void main() {
@@ -292,19 +273,15 @@ export function createThermalTrail(renderer: THREE.WebGLRenderer, quality: Trail
   const gradientM = material(gradientShader, { uPressure: tex(), uVelocity: tex(), uTexel: texel });
 
   const text = { value: 0 };
+  const glyphs = glyphUniforms(WORDS);
   const display = material(displayShader, {
     uVelocity: tex(),
     uHeat: tex(),
-    uDisplay: tex(),
-    uFill: tex(),
-    uAtlasSize: { value: new THREE.Vector2(1, 1) },
-    uWords: { value: Array.from({ length: WORDS }, () => new THREE.Vector4(0, 0, 0, 0)) },
-    uAtlas: { value: Array.from({ length: WORDS }, () => new THREE.Vector2()) },
+    ...glyphs,
     uResolution: { value: new THREE.Vector2(1, 1) },
     uText: text,
   });
 
-  let atlasTextures: THREE.CanvasTexture[] = [];
 
   const run = (m: THREE.ShaderMaterial, to: THREE.WebGLRenderTarget | null) => {
     quad.material = m;
@@ -402,28 +379,12 @@ export function createThermalTrail(renderer: THREE.WebGLRenderer, quality: Trail
       probe.moved = true;
     },
 
-    setAtlas(displayCanvas, fillCanvas) {
-      atlasTextures.forEach(t => t.dispose());
-      atlasTextures = [displayCanvas, fillCanvas].map(c => {
-        const t = new THREE.CanvasTexture(c);
-        t.flipY = false;
-        t.generateMipmaps = false;
-        t.minFilter = THREE.LinearFilter;
-        t.magFilter = THREE.LinearFilter;
-        return t;
-      });
-      display.uniforms.uDisplay.value = atlasTextures[0];
-      display.uniforms.uFill.value = atlasTextures[1];
-      (display.uniforms.uAtlasSize.value as THREE.Vector2).set(displayCanvas.width, displayCanvas.height);
+    setAtlas(fillCanvas) {
+      setGlyphAtlas(glyphs, fillCanvas);
     },
 
     place(words) {
-      const w = display.uniforms.uWords.value as THREE.Vector4[];
-      const a = display.uniforms.uAtlas.value as THREE.Vector2[];
-      words.slice(0, WORDS).forEach((p, i) => {
-        w[i].set(p.x, p.y, p.w, p.h);
-        a[i].set(p.ax, p.ay);
-      });
+      setGlyphPlacements(glyphs, words);
     },
 
     render(r, _shared, dt) {
@@ -447,7 +408,7 @@ export function createThermalTrail(renderer: THREE.WebGLRenderer, quality: Trail
     dispose() {
       targets.forEach(t => t.dispose());
       materials.forEach(m => m.dispose());
-      atlasTextures.forEach(t => t.dispose());
+      glyphs.uFill.value?.dispose();
       geometry.dispose();
     },
   };

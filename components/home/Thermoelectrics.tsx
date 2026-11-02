@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import ScrollScene from "./ScrollScene";
+import CoupleHeat from "./CoupleHeat";
 import Expr from "@/components/site/Expr";
 
 const STEPS = [
@@ -28,7 +29,7 @@ const ELECTRONS = [[300, 0.4, 3.1], [326, 1.5, 3.5], [349, 2.5, 3.0], [313, 2.0,
 
 function Couple() {
   return (
-    <svg viewBox="0 -40 480 600" className="relative h-[38svh] w-auto md:h-auto md:w-full md:max-w-[520px]" role="img" aria-labelledby="couple-title">
+    <svg viewBox="0 -40 480 600" className="relative block h-full w-auto md:h-auto md:w-full" role="img" aria-labelledby="couple-title">
       <title id="couple-title">
         A thermoelectric couple: heat enters the hot plate, flows down p-type and n-type legs to the cold plates, and drives a current through a load.
       </title>
@@ -143,7 +144,11 @@ export default function Thermoelectrics() {
           <div className="relative flex items-center justify-center md:col-span-6">
             {/* Quiet ground under the diagram, so the turbulent field doesn't read through it. */}
             <span aria-hidden="true" className="absolute inset-[-10%] bg-[radial-gradient(closest-side,rgb(12_13_16/0.85),rgb(12_13_16/0.5)_60%,transparent)]" />
-            <Couple />
+            {/* The couple: GL heat beneath, the SVG's drawing on top, sharing one box. */}
+            <div className="relative h-[38svh] w-fit md:h-auto md:w-full md:max-w-[520px]">
+              <CoupleHeat />
+              <Couple />
+            </div>
             {/* Scene progress, as a reading on a scale. */}
             <span aria-hidden="true" className="absolute -right-1 top-1/2 hidden h-[50vh] w-px -translate-y-1/2 bg-paper/10 md:block">
               <span className="absolute inset-x-0 top-0 block h-full origin-top bg-heat" style={{ transform: "scaleY(var(--p, 1))" }} />
