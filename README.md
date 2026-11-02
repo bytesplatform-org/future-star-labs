@@ -10,9 +10,12 @@ npm run build
 ## How it fits together
 
 **Hero** (`components/home/Hero.tsx`):
-- The name is set as three lines that drift apart along x, alternately, as the page scrolls.
-- The pointer acts as a thermal probe. A heated copy of the type shows through a radial mask around it, and the lines lean away from it.
-- On touch the probe drifts by itself; under reduced motion it stays parked.
+- The name is set as three lines that drift apart along x, alternately, as the page scrolls, and lean away from the pointer.
+- The pointer stirs a thermal fluid (`lib/hero/thermalTrail.ts`, a stable-fluids solver after the bytesplatform.com ink trail). The dye is heat: it rises with buoyancy and is drawn as isotherms.
+- Once the arrival has played, the same pass draws the headline from a glyph atlas (`lib/hero/heroType.ts`), placed every frame from the live DOM.
+  - The fluid refracts the letters, splitting them into blue and orange fringes.
+  - The heat burns them toward white and fills the hollow STAR.
+- The DOM `<h1>` stays underneath for readers and search, and stays visible without WebGL or float render targets, or under reduced motion.
 
 **Navigation** (`components/site/SiteNav.tsx`):
 - It mirrors futurestarlabs.com's menu (data in `lib/content/site.ts`).
@@ -21,7 +24,7 @@ npm run build
 
 **GLSL** (`lib/gl/engine.ts`):
 - A small Three.js stage on GSAP's ticker. `components/gl/ShaderCanvas.tsx` mounts a fullscreen shader pass.
-- It currently drives the Seebeck experiment (`lib/shaders/seebeckJunction.ts`, state in `lib/gl/junctionState.ts`).
+- It drives the hero's thermal trail and the Seebeck experiment (`lib/shaders/seebeckJunction.ts`, state in `lib/gl/junctionState.ts`).
 
 **Motion**:
 - Lenis (`lib/animation/scroll.ts`) drives the scroll and keeps ScrollTrigger in step.

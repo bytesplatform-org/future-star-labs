@@ -219,14 +219,22 @@ html.motion .scroll-scene .scene-sticky {
 }
 
 /* Before the arrival plays, each word waits clipped on its own side. */
-html.motion [data-hero-line] > span {
+html.motion [data-hero-word] {
   clip-path: inset(-10% 100% -10% 0%);
 }
-html.motion [data-hero-line][data-dir="-1"] > span {
+html.motion [data-hero-line][data-dir="-1"] [data-hero-word] {
   clip-path: inset(-10% 0% -10% 100%);
 }
 html.motion [data-hero-fade] {
   opacity: 0;
+}
+
+/* Once the thermal pass draws the headline, the DOM copy steps back:
+   still laid out (the GL copy follows it), still selectable and read. */
+.hero[data-gl-type] [data-hero-word] {
+  color: transparent;
+  --stroke: transparent;
+  transition: color 0.5s, -webkit-text-stroke-color 0.5s;
 }
 
 /* Lab paper: a 12-column grid, fading out toward the edges. */
@@ -237,24 +245,6 @@ html.motion [data-hero-fade] {
   background-size: calc(100% / 12) calc(100% / 12);
   -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 40%, transparent 100%);
   mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 40%, transparent 100%);
-}
-
-/* The probe warms the paper under it. */
-.hero-glow {
-  background: radial-gradient(circle 32vw at var(--mx, 66%) var(--my, 50%), rgb(255 106 42 / 0.13), rgb(255 106 42 / 0.04) 45%, transparent 70%);
-}
-
-/* The heated type: visible only within the probe's reach. */
-.hero-heat {
-  color: var(--color-heat);
-  --reach: radial-gradient(
-    circle 13vw at calc(var(--mx, 66%) - var(--wx, 0px)) calc(var(--my, 50%) - var(--wy, 0px)),
-    #000 0%,
-    rgb(0 0 0 / 0.85) 35%,
-    transparent 100%
-  );
-  -webkit-mask-image: var(--reach);
-  mask-image: var(--reach);
 }
 
 /* A measuring scale: a tick every 8px, a long one every 80px. */
