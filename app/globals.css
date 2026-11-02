@@ -210,13 +210,6 @@ html.motion .scroll-scene .scene-sticky {
   .hero-type { font-size: 24vw; }
 }
 
-/* Before the arrival plays, each word waits clipped on its own side. */
-html.motion [data-hero-word] {
-  clip-path: inset(-10% 100% -10% 0%);
-}
-html.motion [data-hero-line][data-dir="-1"] [data-hero-word] {
-  clip-path: inset(-10% 0% -10% 100%);
-}
 html.motion [data-hero-fade] {
   opacity: 0;
 }
@@ -228,6 +221,55 @@ html.motion [data-hero-fade] {
   color: transparent;
   --stroke: transparent;
   transition: color 0.5s, -webkit-text-stroke-color 0.5s;
+}
+
+/* ── Loader (home) ──────────────────────────────────────────────────── */
+
+/* Only when motion is armed: otherwise the page is simply there. If the app
+   never comes alive to dismiss it, it lets go on its own. */
+.loader {
+  animation: loader-failsafe 0s linear 14s forwards;
+}
+html:not(.motion) .loader {
+  display: none;
+}
+@keyframes loader-failsafe {
+  to { visibility: hidden; }
+}
+
+/* Two copies of one screen, each showing its half: the seam is the middle. */
+.loader-top { clip-path: inset(0 0 50% 0); }
+.loader-bottom { clip-path: inset(50% 0 0 0); }
+.loader-half { will-change: transform; }
+
+.loader-word {
+  font-size: clamp(3.5rem, 19vw, 22rem);
+  line-height: 0.8;
+  white-space: nowrap;
+}
+
+/* The heat fills the word left to right with progress. */
+.loader-fill {
+  clip-path: inset(-10% calc((1 - var(--progress, 0)) * 100%) -10% 0);
+}
+
+/* A reading head that never stops passing over the word. */
+.loader-scan {
+  position: absolute;
+  top: -8%;
+  bottom: -8%;
+  left: 0;
+  width: 2px;
+  background: var(--color-heat);
+  box-shadow: 0 0 18px 2px rgb(255 106 42 / 0.55);
+  animation: loader-scan 1.6s var(--ease-field) infinite;
+}
+/* left, not a transform: the word's width is the span to travel. */
+@keyframes loader-scan {
+  from { left: 0%; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  to { left: 100%; opacity: 0; }
 }
 
 /* Lab paper: a 12-column grid, fading out toward the edges. */

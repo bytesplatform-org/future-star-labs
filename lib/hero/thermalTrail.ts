@@ -11,6 +11,7 @@
 import * as THREE from "three";
 import type { Pass } from "@/lib/gl/engine";
 import { glyphChunk, glyphUniforms, setGlyphAtlas, setGlyphPlacements, type WordPlacement } from "@/lib/gl/typeAtlas";
+import { simplex2D } from "@/lib/shaders/noise";
 
 const STEP = 1 / 60;
 const VELOCITY_DISSIPATION = 0.94;
@@ -28,8 +29,13 @@ export type ThermalTrail = Pass & {
   pointer(x: number, y: number): void;
   setAtlas(fill: HTMLCanvasElement): void;
   place(words: WordPlacement[]): void;
-  /** 0..1 — the GL headline fades in once it has taken over from the DOM */
+  /** 0..1 — the GL headline's presence */
   readonly text: { value: number };
+  /**
+   * per word, 0..1: the entrance. Each word materialises from its own side
+   * (dir: +1 from the left, −1 from the right) behind a burning front.
+   */
+  readonly reveal: { value: [number, number, number] };
 };
 
 const vertexShader = /* glsl */ `
@@ -167,6 +173,9 @@ const displayShader = /* glsl */ `
   ${glyphChunk(WORDS)}
   uniform vec2 uResolution;
   uniform float uText;
+  ${simplex2D}
+  uniform vec3 uReveal;
+  uniform vec3 uRevealDir;
 
   const vec3 PAPER = vec3(0.925, 0.910, 0.875);
   const vec3 COLD = vec3(0.30, 0.49, 1.0);
@@ -191,8 +200,24 @@ const displayShader = /* glsl */ `
     if (ol > 90.0) off *= 90.0 / ol;
 
     vec2 g = glyph(p - off) * uText;
+    float word = glyphWord;
+    vec2 local = glyphLocal;
     float cold = glyph(p - off * 1.9).x * uText;
     float warm = glyph(p - off * 0.45).x * uText;
+
+    // Entrance: each word materialises from its own side behind a ragged
+    // burning front; until it has, nothing of it shows, fringes included.
+    float rv = word < 0.5 ? uReveal.x : (word < 1.5 ? uReveal.y : uReveal.z);
+    float dir = word < 0.5 ? uRevealDir.x : (word < 1.5 ? uRevealDir.y : uRevealDir.z);
+    float along = dir > 0.0 ? local.x : 1.0 - local.x;
+    float ragged = along + (snoise(p * 0.012) * 0.06 + snoise(p * 0.05) * 0.02);
+    float front = rv * 1.25 - 0.12;
+    float present = word < 0.0 ? 1.0 : smoothstep(front + 0.01, front - 0.03, ragged);
+    float flame = word < 0.0 ? 0.0 : (1.0 - smoothstep(0.0, 0.07, abs(ragged - front))) * step(rv, 0.999) * step(0.001, rv);
+    float lick = flame * g.y;
+    g *= present;
+    cold *= present;
+    warm *= present;
 
     float k = smoothstep(0.05, 0.85, heat);
     float a = max(g.x, g.y * k);
@@ -203,6 +228,10 @@ const displayShader = /* glsl */ `
     float fw = max(warm - g.x, 0.0);
     col += COLD * fc * 0.85 + HOT * fw * 0.85;
     a = max(a, max(fc, fw) * 0.85);
+
+    // The entrance's burning front, over the letter it's revealing.
+    col = col * (1.0 - lick) + burn(0.55 + 0.45 * lick) * lick;
+    a = a * (1.0 - lick) + lick;
 
     gl_FragColor = vec4(col, a);
   }
@@ -273,6 +302,7 @@ export function createThermalTrail(renderer: THREE.WebGLRenderer, quality: Trail
   const gradientM = material(gradientShader, { uPressure: tex(), uVelocity: tex(), uTexel: texel });
 
   const text = { value: 0 };
+  const reveal = { value: [0, 0, 0] as [number, number, number] };
   const glyphs = glyphUniforms(WORDS);
   const display = material(displayShader, {
     uVelocity: tex(),
@@ -280,6 +310,8 @@ export function createThermalTrail(renderer: THREE.WebGLRenderer, quality: Trail
     ...glyphs,
     uResolution: { value: new THREE.Vector2(1, 1) },
     uText: text,
+    uReveal: reveal,
+    uRevealDir: { value: [1, -1, 1] },
   });
 
 
@@ -358,6 +390,7 @@ export function createThermalTrail(renderer: THREE.WebGLRenderer, quality: Trail
 
   return {
     text,
+    reveal,
 
     pointer(x, y) {
       if (x < 0 || x > 1 || y < 0 || y > 1) {

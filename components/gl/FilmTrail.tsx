@@ -2,11 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import { isCoarsePointer, prefersReducedMotion } from "@/lib/animation/prefs";
+import { onBootDone } from "@/lib/boot";
 
 /**
  * The pointer's film trail (lib/gl/filmTrail.ts) over the whole page, on a
  * fixed, click-through canvas. Fine pointers only, and not under reduced
- * motion — touch has no hover to trail.
+ * motion — touch has no hover to trail. Nothing until the page is shown:
+ * no trail over the loader.
  */
 export default function FilmTrail() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -30,9 +32,12 @@ export default function FilmTrail() {
 
       const onMove = (e: PointerEvent) => trail.pointer(e.clientX, e.clientY, true);
       const onLeave = () => trail.pointer(0, 0, false);
-      window.addEventListener("pointermove", onMove, { passive: true });
-      document.documentElement.addEventListener("pointerleave", onLeave);
+      const stopWaiting = onBootDone(() => {
+        window.addEventListener("pointermove", onMove, { passive: true });
+        document.documentElement.addEventListener("pointerleave", onLeave);
+      });
       teardown = () => {
+        stopWaiting();
         window.removeEventListener("pointermove", onMove);
         document.documentElement.removeEventListener("pointerleave", onLeave);
         stage.dispose();

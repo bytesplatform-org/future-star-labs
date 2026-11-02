@@ -120,6 +120,9 @@ export function placeWords(words: AtlasWord[], atlas: TypeAtlas, canvas: DOMRect
  * x is the glyph as set, y the glyph filled. A hollow word's outline is the
  * band where the fill changes within half a stroke — the edge of the
  * glyph's union, so overlapping contours inside a letter never show.
+ *
+ * Each call also leaves which word p fell in (glyphWord, −1 for none) and
+ * where within it (glyphLocal, 0..1 across its box), for per-word effects.
  */
 export const glyphChunk = (words: number) => /* glsl */ `
   uniform sampler2D uFill;
@@ -127,11 +130,17 @@ export const glyphChunk = (words: number) => /* glsl */ `
   uniform vec4 uWords[${words}];
   uniform vec3 uAtlas[${words}];
 
+  float glyphWord = -1.0;
+  vec2 glyphLocal = vec2(0.0);
+
   vec2 glyph(vec2 p) {
     vec2 g = vec2(0.0);
+    glyphWord = -1.0;
     for (int i = 0; i < ${words}; i++) {
       vec2 q = p - uWords[i].xy;
       if (q.x >= 0.0 && q.y >= 0.0 && q.x < uWords[i].z && q.y < uWords[i].w) {
+        glyphWord = float(i);
+        glyphLocal = q / uWords[i].zw;
         vec2 at = uAtlas[i].xy + q;
         float f = texture2D(uFill, at / uAtlasSize).a;
         float shown = f;

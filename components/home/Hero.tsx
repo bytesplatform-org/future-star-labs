@@ -4,6 +4,7 @@ import { useEffect, useRef } from "react";
 import gsap from "gsap";
 import { ScrollTrigger } from "gsap/ScrollTrigger";
 import { fontsReady, isCoarsePointer, prefersReducedMotion } from "@/lib/animation/prefs";
+import { bootTask, isBooted, onBootDone } from "@/lib/boot";
 
 gsap.registerPlugin(ScrollTrigger);
 
@@ -20,18 +21,16 @@ const SEQUENCE = ["Matter", "Energy", "Signal", "Discovery"];
 const PROBE_MIN = 20;
 const PROBE_MAX = 480;
 
-/** when the GL headline takes over from the DOM: after the arrival has played */
-const TAKEOVER_DELAY = 2.1;
-
 /**
  * Scene 01. The name is the architecture: three lines set in a close
  * cascade so they read as one name — and they pull apart along x as the
  * page scrolls, each the opposite way to its neighbour.
  *
- * Once the arrival has played, the headline is drawn in GL through a thermal
- * fluid the pointer stirs (lib/hero/thermalTrail.ts): bent by the moving
- * medium, burning toward white where the heat passes, the hollow STAR
- * filling as it does. The fluid itself is never drawn in the open.
+ * The headline is drawn in GL through a thermal fluid the pointer stirs
+ * (lib/hero/thermalTrail.ts): bent by the moving medium, burning toward
+ * white where the heat passes, the hollow STAR filling as it does. It gets
+ * ready behind the loader (lib/boot.ts), and enters as the loader parts:
+ * each word materialising from its own side behind a burning front.
  * The DOM headline stays in place underneath for readers and search, and
  * remains the visible one without WebGL or with reduced motion.
  */
@@ -40,27 +39,31 @@ export default function Hero() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const readoutRef = useRef<HTMLSpanElement>(null);
 
-  // Arrival, scroll drift and lean: DOM motion, which the GL copy follows.
+  // Entrance, scroll drift and lean: DOM motion, which the GL copy follows.
   useEffect(() => {
     const root = rootRef.current;
     if (!root || prefersReducedMotion()) return;
+    const arrivingLate = isBooted();
+    let stopEntrance = () => {};
 
     const ctx = gsap.context(() => {
       const lines = gsap.utils.toArray<HTMLElement>("h1 [data-hero-line]");
       const words = gsap.utils.toArray<HTMLElement>("h1 [data-hero-word]");
-      const lineOf = (el: HTMLElement) => el.closest<HTMLElement>("[data-hero-line]")!;
-      const dir = (el: HTMLElement) => Number(lineOf(el).dataset.dir);
+      const dir = (el: HTMLElement) => Number(el.closest<HTMLElement>("[data-hero-line]")!.dataset.dir);
 
-      // Arrival: each word wipes in from its own side.
-      gsap.fromTo(
-        words,
-        {
-          x: (_i: number, el: HTMLElement) => `${-dir(el) * 8}vw`,
-          clipPath: (_i: number, el: HTMLElement) => (dir(el) > 0 ? "inset(-10% 100% -10% 0%)" : "inset(-10% 0% -10% 100%)"),
-        },
-        { x: 0, clipPath: "inset(-10% 0% -10% 0%)", duration: 1.6, ease: "expo.out", delay: (i: number) => 0.15 + i * 0.13 },
-      );
-      gsap.fromTo("[data-hero-fade]", { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 1.2, ease: "power3.out", delay: 0.9, stagger: 0.08 });
+      // Entrance, as the loader parts. The GL copy materialises itself (see
+      // the GL effect); here the words drift in from their own sides, which
+      // the GL copy follows. Without GL, the DOM words fade in as they do.
+      if (arrivingLate) gsap.set("[data-hero-fade]", { autoAlpha: 1 });
+      else {
+        gsap.set(words, { x: (_i: number, el: HTMLElement) => `${-dir(el) * 5}vw` });
+        stopEntrance = onBootDone(() => {
+          const gl = root.hasAttribute("data-gl-type");
+          gsap.to(words, { x: 0, duration: 1.8, ease: "expo.out", delay: (i: number) => 0.1 + i * 0.16 });
+          if (!gl) gsap.fromTo(words, { autoAlpha: 0 }, { autoAlpha: 1, duration: 1.2, ease: "power2.out", delay: (i: number) => 0.1 + i * 0.16 });
+          gsap.fromTo("[data-hero-fade]", { autoAlpha: 0, y: 12 }, { autoAlpha: 1, y: 0, duration: 1.2, ease: "power3.out", delay: 0.9, stagger: 0.08 });
+        });
+      }
 
       // Scroll: the name, set close to read as one, pulls apart, alternately.
       const scrub = { trigger: root, start: "top top", end: "bottom top", scrub: 0.9 };
@@ -86,7 +89,10 @@ export default function Hero() {
       return () => root.removeEventListener("pointermove", onMove);
     }, root);
 
-    return () => ctx.revert();
+    return () => {
+      stopEntrance();
+      ctx.revert();
+    };
   }, []);
 
   // The GL headline, and the thermal fluid it's drawn through.
@@ -98,18 +104,22 @@ export default function Hero() {
     let cancelled = false;
     let teardown: (() => void) | undefined;
 
+    // The loader holds the page until this settles — ready, or not possible.
+    let settle!: () => void;
+    bootTask(new Promise<void>(r => { settle = r; }));
+
     Promise.all([import("@/lib/gl/engine"), import("@/lib/hero/thermalTrail"), import("@/lib/gl/typeAtlas")]).then(
       ([{ createStage }, { createThermalTrail }, { atlasWords, buildAtlas, placeWords }]) => {
-        if (cancelled) return;
+        if (cancelled) return settle();
         const stage = createStage(canvas, { dprCap: coarse ? 1.5 : 2 });
-        if (!stage) return;
+        if (!stage) return settle();
         const trail = createThermalTrail(
           stage.renderer,
           coarse ? { sim: 96, dye: 384, pressureIterations: 12 } : { sim: 160, dye: 640, pressureIterations: 20 },
         );
         if (!trail) {
           stage.dispose();
-          return;
+          return settle();
         }
         stage.add(trail);
 
@@ -136,17 +146,20 @@ export default function Hero() {
         });
         ro.observe(root);
 
-        // Take over from the DOM once the arrival has played and the font is in.
-        const takeover = gsap.delayedCall(TAKEOVER_DELAY, () => {
-          void fontsReady(3000).then(() => {
-            if (cancelled) return;
-            rasterise();
-            root.setAttribute("data-gl-type", "");
-            gsap.to(trail.text, { value: 1, duration: 0.5, ease: "sine.inOut" });
-          });
+        // Ready the GL headline behind the loader: type set, DOM copy handed
+        // over, nothing yet revealed. Settle once a frame has been drawn.
+        const late = isBooted();
+        void fontsReady(4000).then(() => {
+          if (cancelled) return settle();
+          rasterise();
+          root.setAttribute("data-gl-type", "");
+          trail.text.value = 1;
+          if (late) trail.reveal.value.fill(1);
+          requestAnimationFrame(() => requestAnimationFrame(() => settle()));
         });
 
-        // The probe: the hand on fine pointers; on touch, a slow path of its own.
+        // The probe: the hand on fine pointers; on touch, a slow path of its
+        // own. Neither until the page is shown — no trail under the loader.
         const toCanvas = (x: number, y: number) => {
           const r = canvas.getBoundingClientRect();
           trail.pointer((x - r.left) / r.width, (y - r.top) / r.height);
@@ -155,11 +168,17 @@ export default function Hero() {
         const drift = (time: number) => {
           trail.pointer(0.5 + 0.34 * Math.sin(time * 0.45), 0.55 + 0.18 * Math.sin(time * 0.7 + 1.3));
         };
-        if (coarse) gsap.ticker.add(drift);
-        else window.addEventListener("pointermove", onMove, { passive: true });
+        const stopWaiting = onBootDone(() => {
+          // Each word materialises from its own side, in turn.
+          trail.reveal.value.forEach((_, i) => {
+            gsap.to(trail.reveal.value, { [i]: 1, duration: 1.6, ease: "power2.inOut", delay: 0.1 + i * 0.16 });
+          });
+          if (coarse) gsap.ticker.add(drift);
+          else window.addEventListener("pointermove", onMove, { passive: true });
+        });
 
         teardown = () => {
-          takeover.kill();
+          stopWaiting();
           gsap.ticker.remove(follow);
           gsap.ticker.remove(drift);
           window.removeEventListener("pointermove", onMove);
@@ -169,10 +188,12 @@ export default function Hero() {
           stage.dispose();
         };
       },
+      () => settle(),
     );
 
     return () => {
       cancelled = true;
+      settle?.();
       teardown?.();
     };
   }, []);

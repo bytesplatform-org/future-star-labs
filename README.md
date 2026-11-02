@@ -9,9 +9,16 @@ npm run build
 
 ## How it fits together
 
+**Loader and boot** (`components/home/Loader.tsx`, `lib/boot.ts`):
+- Anything that must be ready before the home page is seen registers `bootTask(promise)`: fonts, page load, the hero's GL headline. The loader holds until they settle (never under ~1s, never over 9s).
+- Progress is real, with a creep so it never looks stuck.
+- On exit the screen splits along its middle: the top half (and its half of LOADING) slides left, the bottom half slides right.
+- Entrances and pointer trails wait on `onBootDone`, so nothing plays or trails under the loader.
+- There's no loader under reduced motion, without JS, or on client navigation back home.
+
 **Hero** (`components/home/Hero.tsx`):
 - The name is set as three lines that drift apart along x, alternately, as the page scrolls, and lean away from the pointer.
-- Once the arrival has played, the headline is drawn in GL (`lib/hero/heroType.ts` glyph atlas, placed every frame from the live DOM) through a thermal fluid the pointer stirs (`lib/hero/thermalTrail.ts`).
+- The headline is readied in GL behind the loader and enters as it parts, each word materialising from its own side behind a burning front. It's drawn in GL (`lib/gl/typeAtlas.ts` glyph atlas, placed every frame from the live DOM) through a thermal fluid the pointer stirs (`lib/hero/thermalTrail.ts`).
   - The fluid bends the letters, splitting them into blue and orange fringes.
   - Its heat burns them toward white and fills the hollow STAR.
   - The fluid itself is never drawn in the open.
